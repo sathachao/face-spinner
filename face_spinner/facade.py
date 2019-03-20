@@ -54,7 +54,7 @@ def calculate_IoU(window1, window2):
         window2 (face_spinner.Window): Window 2
     
     Returns:
-        float -> 
+        float
     """
     x_overlap = max(
         0,
@@ -224,15 +224,13 @@ class PCN:
         suppressed_windows = [window_list[i] for i in range(length) if not flag[i]]
         return suppressed_windows
 
-    def _stage1(self, img, padded_img, net, thres):
+    def _stage1(self, img, padded_img):
         """
         Performs PCN-1
 
         Args:
             img (numpy.array): Input image
             padded_img (numpy.array): Padded image
-            net (face_spinner.models.PCN1): Input network
-            thres (float): Threshold
 
         Returns:
             list of `face_spinner.Window` -> Windows of detected faces
@@ -242,27 +240,27 @@ class PCN:
         col = (padded_img.shape[1] - img.shape[1]) // 2
 
         window_list = []
-        netSize = 24
-        curScale = self._min_face_size / netSize
-        img_resized = self._resize_image(img, curScale)
-        while min(img_resized.shape[:2]) >= netSize:
+        network_size = 24
+        current_scale = self._min_face_size / network_size
+        img_resized = self._resize_image(img, current_scale)
+        while min(img_resized.shape[:2]) >= network_size:
             img_resized = self._preprocess_img(img_resized)
             # net forward
-            net_input = to_torch_tensor(img_resized)
+            network_input = to_torch_tensor(img_resized)
             with torch.no_grad():
-                net.eval()
-                cls_prob, rotate, bbox = net(net_input)
+                self._pcn1.eval()
+                cls_prob, rotate, bbox = self._pcn1(network_input)
 
-            w = netSize * curScale
+            w = network_size * current_scale
             for i in range(cls_prob.shape[2]):  # cls_prob[2]->height
                 for j in range(cls_prob.shape[3]):  # cls_prob[3]->width
-                    if cls_prob[0, 1, i, j].item() > thres:
+                    if cls_prob[0, 1, i, j].item() > self._thres1:
                         sn = bbox[0, 0, i, j].item()
                         xn = bbox[0, 1, i, j].item()
                         yn = bbox[0, 2, i, j].item()
                         rx = (
                             int(
-                                j * curScale * self._stride
+                                j * current_scale * self._stride
                                 - 0.5 * sn * w
                                 + sn * xn * w
                                 + 0.5 * w
@@ -271,7 +269,7 @@ class PCN:
                         )
                         ry = (
                             int(
-                                i * curScale * self._stride
+                                i * current_scale * self._stride
                                 - 0.5 * sn * w
                                 + sn * yn * w
                                 + 0.5 * w
@@ -290,7 +288,7 @@ class PCN:
                                         rw,
                                         rw,
                                         0,
-                                        curScale,
+                                        current_scale,
                                         cls_prob[0, 1, i, j].item(),
                                     )
                                 )
@@ -302,23 +300,21 @@ class PCN:
                                         rw,
                                         rw,
                                         180,
-                                        curScale,
+                                        current_scale,
                                         cls_prob[0, 1, i, j].item(),
                                     )
                                 )
             img_resized = self._resize_image(img_resized, self._scale)
-            curScale = img.shape[0] / img_resized.shape[0]
+            current_scale = img.shape[0] / img_resized.shape[0]
         return window_list
 
-    def _stage2(self, img, img180, net, thres, dim, windows):
+    def _stage2(self, img, img180, dim, windows):
         """
         Performs PCN-2
 
         Args:
             img (numpy.array): Input image
             img180 (numpy.array): Flipped input image
-            net (face_spinner.models.PCN1): Input network
-            thres (float): Threshold
             dim (int): Preprocess dimension size
             windows (list of `face_spinner.Window`): List of detected faces from PCN-1
 
@@ -333,86 +329,81 @@ class PCN:
         height = img.shape[0]
         for win in window_list:
             if abs(win.angle) < EPS:
-                datalist.append(
-                    self._preprocess_img(
-                        img[win.y : win.y + win.h, win.x : win.x + win.w, :], dim
-                    )
+                preprocessed_img = self._preprocess_img(
+                    img[win.y : win.y + win.h, win.x : win.x + win.w, :], dim
                 )
+                datalist.append(preprocessed_img)
             else:
                 y2 = win.y + win.h - 1
                 y = height - 1 - y2
-                datalist.append(
-                    self._preprocess_img(
-                        img180[y : y + win.h, win.x : win.x + win.w, :], dim
-                    )
+                preprocessed_img = self._preprocess_img(
+                    img180[y : y + win.h, win.x : win.x + win.w, :], dim
                 )
+                datalist.append(preprocessed_img)
         # net forward
-        net_input = to_torch_tensor(datalist)
+        network_input = to_torch_tensor(datalist)
         with torch.no_grad():
-            net.eval()
-            cls_prob, rotate, bbox = net(net_input)
+            self._pcn2.eval()
+            cls_prob, rotate, bbox = self._pcn2(network_input)
 
         new_windows = []
         for i in range(length):
-            if cls_prob[i, 1].item() > thres:
+            if cls_prob[i, 1].item() > self._thres2:
                 sn = bbox[i, 0].item()
                 xn = bbox[i, 1].item()
                 yn = bbox[i, 2].item()
-                cropX = window_list[i].x
-                cropY = window_list[i].y
-                cropW = window_list[i].w
+                crop_x = window_list[i].x
+                crop_y = window_list[i].y
+                crop_w = window_list[i].w
                 if abs(window_list[i].angle) > EPS:
-                    cropY = height - 1 - (cropY + cropW - 1)
-                w = int(sn * cropW)
-                x = int(cropX - 0.5 * sn * cropW + cropW * sn * xn + 0.5 * cropW)
-                y = int(cropY - 0.5 * sn * cropW + cropW * sn * yn + 0.5 * cropW)
-                maxRotateScore = 0
-                maxRotateIndex = 0
+                    crop_y = height - 1 - (crop_y + crop_w - 1)
+                w = int(sn * crop_w)
+                x = int(crop_x - 0.5 * sn * crop_w + crop_w * sn * xn + 0.5 * crop_w)
+                y = int(crop_y - 0.5 * sn * crop_w + crop_w * sn * yn + 0.5 * crop_w)
+                max_rotate_score = 0
+                max_rotate_index = 0
                 for j in range(3):
-                    if rotate[i, j].item() > maxRotateScore:
-                        maxRotateScore = rotate[i, j].item()
-                        maxRotateIndex = j
+                    if rotate[i, j].item() > max_rotate_score:
+                        max_rotate_score = rotate[i, j].item()
+                        max_rotate_index = j
                 if is_legal(x, y, img) and is_legal(x + w - 1, y + w - 1, img):
                     angle = 0
                     if abs(window_list[i].angle) < EPS:
-                        if maxRotateIndex == 0:
+                        if max_rotate_index == 0:
                             angle = 90
-                        elif maxRotateIndex == 1:
+                        elif max_rotate_index == 1:
                             angle = 0
                         else:
                             angle = -90
-                        new_windows.append(
-                            Window(
-                                x,
-                                y,
-                                w,
-                                w,
-                                angle,
-                                window_list[i].scale,
-                                cls_prob[i, 1].item(),
-                            )
+                        new_window = Window(
+                            x,
+                            y,
+                            w,
+                            w,
+                            angle,
+                            window_list[i].scale,
+                            cls_prob[i, 1].item(),
                         )
                     else:
-                        if maxRotateIndex == 0:
+                        if max_rotate_index == 0:
                             angle = 90
-                        elif maxRotateIndex == 1:
+                        elif max_rotate_index == 1:
                             angle = 180
                         else:
                             angle = -90
-                        new_windows.append(
-                            Window(
-                                x,
-                                height - 1 - (y + w - 1),
-                                w,
-                                w,
-                                angle,
-                                window_list[i].scale,
-                                cls_prob[i, 1].item(),
-                            )
+                        new_window = Window(
+                            x,
+                            height - 1 - (y + w - 1),
+                            w,
+                            w,
+                            angle,
+                            window_list[i].scale,
+                            cls_prob[i, 1].item(),
                         )
+                    new_windows.append(new_window)
         return new_windows
 
-    def _stage3(self, padded_img, img180, img90, img_neg90, net, thres, dim, windows):
+    def _stage3(self, padded_img, img180, img90, img_neg90, dim, windows):
         """
         Performs PCN-3
 
@@ -421,8 +412,6 @@ class PCN:
             img180 (numpy.array): Flipped image
             img90 (numpy.array): 90-degree rotated image
             img_neg90 (numpy.array): -90-degree rotated image
-            net (face_spinner.models.PCN1): Input network
-            thres (float): Threshold
             dim (int): Preprocess dimension size
             windows (list of `face_spinner.Window`): List of detected faces from PCN-1
 
@@ -439,42 +428,35 @@ class PCN:
 
         for win in window_list:
             if abs(win.angle) < EPS:
-                datalist.append(
-                    self._preprocess_img(
-                        padded_img[win.y : win.y + win.h, win.x : win.x + win.w, :], dim
-                    )
+                preprocessed_img = self._preprocess_img(
+                    padded_img[win.y : win.y + win.h, win.x : win.x + win.w, :], dim
                 )
             elif abs(win.angle - 90) < EPS:
-                datalist.append(
-                    self._preprocess_img(
-                        img90[win.x : win.x + win.w, win.y : win.y + win.h, :], dim
-                    )
+                preprocessed_img = self._preprocess_img(
+                    img90[win.x : win.x + win.w, win.y : win.y + win.h, :], dim
                 )
             elif abs(win.angle + 90) < EPS:
                 x = win.y
                 y = width - 1 - (win.x + win.w - 1)
-                datalist.append(
-                    self._preprocess_img(
-                        img_neg90[y : y + win.h, x : x + win.w, :], dim
-                    )
+                preprocessed_img = self._preprocess_img(
+                    img_neg90[y : y + win.h, x : x + win.w, :], dim
                 )
             else:
                 y2 = win.y + win.h - 1
                 y = height - 1 - y2
-                datalist.append(
-                    self._preprocess_img(
-                        img180[y : y + win.h, win.x : win.x + win.w], dim
-                    )
+                preprocessed_img = self._preprocess_img(
+                    img180[y : y + win.h, win.x : win.x + win.w], dim
                 )
+            datalist.append(preprocessed_img)
         # network forward
-        net_input = to_torch_tensor(datalist)
+        network_input = to_torch_tensor(datalist)
         with torch.no_grad():
-            net.eval()
-            cls_prob, rotate, bbox = net(net_input)
+            self._pcn3.eval()
+            cls_prob, rotate, bbox = self._pcn3(network_input)
 
         new_windows = []
         for i in range(length):
-            if cls_prob[i, 1].item() > thres:
+            if cls_prob[i, 1].item() > self._thres3:
                 sn = bbox[i, 0].item()
                 xn = bbox[i, 1].item()
                 yn = bbox[i, 2].item()
@@ -499,53 +481,46 @@ class PCN:
                 angle = self._angle_range * rotate[i, 0].item()
                 if is_legal(x, y, img_tmp) and is_legal(x + w - 1, y + w - 1, img_tmp):
                     if abs(window_list[i].angle) < EPS:
-                        new_windows.append(
-                            Window(
-                                x,
-                                y,
-                                w,
-                                w,
-                                angle,
-                                window_list[i].scale,
-                                cls_prob[i, 1].item(),
-                            )
+                        new_window = Window(
+                            x,
+                            y,
+                            w,
+                            w,
+                            angle,
+                            window_list[i].scale,
+                            cls_prob[i, 1].item(),
                         )
                     elif abs(window_list[i].angle - 180) < EPS:
-                        new_windows.append(
-                            Window(
-                                x,
-                                height - 1 - (y + w - 1),
-                                w,
-                                w,
-                                180 - angle,
-                                window_list[i].scale,
-                                cls_prob[i, 1].item(),
-                            )
+                        new_window = Window(
+                            x,
+                            height - 1 - (y + w - 1),
+                            w,
+                            w,
+                            180 - angle,
+                            window_list[i].scale,
+                            cls_prob[i, 1].item(),
                         )
                     elif abs(window_list[i].angle - 90) < EPS:
-                        new_windows.append(
-                            Window(
-                                y,
-                                x,
-                                w,
-                                w,
-                                90 - angle,
-                                window_list[i].scale,
-                                cls_prob[i, 1].item(),
-                            )
+                        new_window = Window(
+                            y,
+                            x,
+                            w,
+                            w,
+                            90 - angle,
+                            window_list[i].scale,
+                            cls_prob[i, 1].item(),
                         )
                     else:
-                        new_windows.append(
-                            Window(
-                                width - y - w,
-                                x,
-                                w,
-                                w,
-                                -90 + angle,
-                                window_list[i].scale,
-                                cls_prob[i, 1].item(),
-                            )
+                        new_window = Window(
+                            width - y - w,
+                            x,
+                            w,
+                            w,
+                            -90 + angle,
+                            window_list[i].scale,
+                            cls_prob[i, 1].item(),
                         )
+                    new_windows.append(new_window)
         return new_windows
 
     def detect(self, img):
@@ -564,15 +539,11 @@ class PCN:
         img90 = cv2.transpose(padded_img)
         img_neg90 = cv2.flip(img90, 0)
 
-        windows = self._stage1(img, padded_img, self._pcn1, self._thres1)
+        windows = self._stage1(img, padded_img)
         windows = self._suppress(windows, True, self._nms_thres1)
-        windows = self._stage2(
-            padded_img, img180, self._pcn2, self._thres2, 24, windows
-        )
+        windows = self._stage2(padded_img, img180, 24, windows)
         windows = self._suppress(windows, True, self._nms_thres2)
-        windows = self._stage3(
-            padded_img, img180, img90, img_neg90, self._pcn3, self._thres3, 48, windows
-        )
+        windows = self._stage3(padded_img, img180, img90, img_neg90, 48, windows)
         windows = self._suppress(windows, False, self._nms_thres3)
         windows = self._delete_fp(windows)
 

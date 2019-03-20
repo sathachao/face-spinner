@@ -1,4 +1,3 @@
-
 import os
 import sys
 import numpy as np
@@ -10,7 +9,7 @@ from face_spinner.models import PCN1, PCN2, PCN3
 from face_spinner.facade import PCN
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print("Insufficient input. Please input filename after the command.")

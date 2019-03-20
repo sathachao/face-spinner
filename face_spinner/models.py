@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 
 class PCN1(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=2, dilation=1)
@@ -27,13 +26,12 @@ class PCN1(nn.Module):
 
 
 class PCN2(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 20, kernel_size=3, stride=1)
         self.conv2 = nn.Conv2d(20, 40, kernel_size=3, stride=1)
         self.conv3 = nn.Conv2d(40, 70, kernel_size=2, stride=1)
-        self.fc = nn.Linear(70*3*3, 140)
+        self.fc = nn.Linear(70 * 3 * 3, 140)
         self.rotate = nn.Linear(140, 3)
         self.cls_prob = nn.Linear(140, 2)
         self.bbox = nn.Linear(140, 3)
@@ -57,20 +55,18 @@ class PCN2(nn.Module):
 
 
 class PCN3(nn.Module):
-
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 24, kernel_size=3, stride=1)
         self.conv2 = nn.Conv2d(24, 48, kernel_size=3, stride=1)
         self.conv3 = nn.Conv2d(48, 96, kernel_size=3, stride=1)
         self.conv4 = nn.Conv2d(96, 144, kernel_size=2, stride=1)
-        self.fc = nn.Linear(144*3*3, 192)
+        self.fc = nn.Linear(144 * 3 * 3, 192)
         self.cls_prob = nn.Linear(192, 2)
         self.bbox = nn.Linear(192, 3)
         self.rotate = nn.Linear(192, 1)
         self.mp1 = nn.MaxPool2d(kernel_size=3, stride=2)
         self.mp2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
 
     def forward(self, x):
         batch_size = x.size(0)
@@ -91,4 +87,3 @@ class PCN3(nn.Module):
         rotate = self.rotate(x)
         bbox = self.bbox(x)
         return cls_prob, rotate, bbox
-

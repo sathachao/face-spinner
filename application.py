@@ -1,4 +1,3 @@
-
 import io
 import os
 import sys
@@ -12,11 +11,12 @@ from face_spinner.utils import rotate_bound
 from face_spinner.models import PCN1, PCN2, PCN3
 from face_spinner.facade import PCN
 
+
 def setup_model():
     """
     Load PCN-x models and initialize a facade PCN
 
-    Returns
+    Returns:
         face_spinner.facade.PCN -> PCN model
     """
     pcn1_state_dict = torch.load("saved_models/model_0.sdict")
@@ -34,11 +34,12 @@ def setup_model():
     model = PCN(pcn1, pcn2, pcn3)
     return model
 
+
 def create_app():
     """
     Create a Flask application for face alignment
 
-    Returns
+    Returns:
         flask.Flask -> Flask application
     """
     app = Flask(__name__)
@@ -46,15 +47,17 @@ def create_app():
     model = setup_model()
     app.config.from_mapping(MODEL=model)
 
-    @app.route("/", methods=["GET",])
+    @app.route("/", methods=["GET"])
     def howto():
-        instruction = """
-        Send POST request to /align to fix face orientation in input image, ex.
-            curl -X POST -F "image=@/path/to/face.jpg" --output output.jpg localhost:5000/align
-        """
+        instruction = (
+            "Send POST request to /align to fix face orientation in input image"
+            "\nex."
+            "\n\tcurl -X POST -F 'image=@/path/to/face.jpg' --output output.jpg localhost:5000/align"
+        )
+
         return instruction
-    
-    @app.route("/align", methods=["POST",])
+
+    @app.route("/align", methods=["POST"])
     def align():
         data = request.files["image"]
         img_str = data.read()
@@ -75,8 +78,15 @@ def create_app():
                 return "Unexpected encoding error. Try again", 400
             byte_buffer = io.BytesIO(buf.tostring())
 
-            return send_file(byte_buffer, "image/jpeg", as_attachment=True, attachment_filename="output.jpg")
+            return send_file(
+                byte_buffer,
+                "image/jpeg",
+                as_attachment=True,
+                attachment_filename="output.jpg",
+            )
+
     return app
+
 
 if __name__ == "__main__":
     app = create_app()

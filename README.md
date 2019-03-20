@@ -29,6 +29,18 @@ python -m example.basic /path/to/your/image.jpg # Result saved to output.jpg
 ```bash
 python application.py # Run on localhost:5000
 # Check usage using `curl localhost:5000`
+# Test making a request to align an image. Result will be outputted to output.jpg
+curl -X POST -F "image=@tests/img/face-270.jpg" --output output.jpg localhost:5000/align
+```
+
+### Build & Run in Docker container
+
+```bash
+docker build -t face-spinner .
+docker run -p 5000:5000 face-spinner # Run on localhost:5000
+# Check usage using `curl localhost:5000`
+# Test making a request to align an image. Result will be outputted to output.jpg
+curl -X POST -F "image=@tests/img/face-270.jpg" --output output.jpg localhost:5000/align
 ```
 
 ### Citing & Thanks

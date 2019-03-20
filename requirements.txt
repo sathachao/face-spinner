@@ -1,0 +1,21 @@
+-i https://pypi.org/simple
+backports.functools-lru-cache==1.5
+click==7.0
+cycler==0.10.0
+flask==1.0.2
+https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl#egg=torch
+itsdangerous==1.1.0
+jinja2==2.10
+kiwisolver==1.0.1
+markupsafe==1.1.1
+matplotlib==2.2.4
+numpy==1.16.2
+opencv-contrib-python==4.0.0.21
+pillow==5.4.1
+pyparsing==2.3.1
+python-dateutil==2.8.0
+pytz==2018.9
+six==1.12.0
+subprocess32==3.5.3
+torchvision==0.2.2.post3
+werkzeug==0.14.1

@@ -43,7 +43,7 @@ def is_inside(x, y, window):
     else:
         return False
 
-def IoU(window1, window2):
+def calculate_IoU(window1, window2):
     """
     Calculates IoU (Intersection over Union) value
 
@@ -73,6 +73,18 @@ class Window2:
 class PCN:
 
     def __init__(self, pcn1, pcn2, pcn3, thres1=0.37, thres2=0.43, thres3=0.97, min_face_size=20):
+        """
+        PCN is an implementation of Progressive Calibration Networks to perform face detection
+
+        Args:
+            pcn1 (face_spinner.models.PCN1): Model for stage 1
+            pcn2 (face_spinner.models.PCN2): Model for stage 2
+            pcn3 (face_spinner.models.PCN3): Model for stage 3
+            thres1 (float): Confidence threshold for model pcn1
+            thres2 (float): Confidence threshold for model pcn2
+            thres3 (float): Confidence threshold for model pcn3
+            min_face_size (float): Minimum face size to be detected
+        """
         self._pcn1 = pcn1
         self._pcn2 = pcn2
         self._pcn3 = pcn3
@@ -155,7 +167,7 @@ class PCN:
         win_list = windows[:]
         length = len(windows)
         if length == 0:
-            return winlist
+            return win_list
         win_list.sort(key=lambda x: x.conf, reverse=True)
         flags = [0] * length
         for i in range(length):
@@ -164,7 +176,7 @@ class PCN:
             for j in range(i+1, length):
                 if local and abs(win_list[i].scale - win_list[j].scale) > EPS:
                     continue
-                if IoU(win_list[i], win_list[j]) > threshold:
+                if calculate_IoU(win_list[i], win_list[j]) > threshold:
                     flags[j] = 1
         suppressed_windows = [win_list[i] for i in range(length) if not flags[i]]
         return suppressed_windows
@@ -179,20 +191,20 @@ class PCN:
         Returns:
             list of `face_spinner.Window` -> Windows with false positives deleted
         """
-        winlist = windows[:]
-        length = len(winlist)
+        window_list = windows[:]
+        length = len(window_list)
         if length == 0:
-            return winlist
-        winlist.sort(key=lambda x: x.conf, reverse=True)
+            return window_list
+        window_list.sort(key=lambda x: x.conf, reverse=True)
         flag = [0] * length
         for i in range(length):
             if flag[i]:
                 continue
             for j in range(i+1, length):
-                win = winlist[j]
-                if is_inside(win.x, win.y, winlist[i]) and is_inside(win.x + win.w - 1, win.y + win.h - 1, winlist[i]):
+                win = window_list[j]
+                if is_inside(win.x, win.y, window_list[i]) and is_inside(win.x + win.w - 1, win.y + win.h - 1, window_list[i]):
                     flag[j] = 1
-        suppressed_windows = [winlist[i] for i in range(length) if not flag[i]]
+        suppressed_windows = [window_list[i] for i in range(length) if not flag[i]]
         return suppressed_windows
     
     def _stage1(self, img, padded_img, net, thres):
@@ -212,7 +224,7 @@ class PCN:
         row = (padded_img.shape[0] - img.shape[0]) // 2
         col = (padded_img.shape[1] - img.shape[1]) // 2
 
-        winlist = []
+        window_list = []
         netSize = 24
         curScale = self._min_face_size / netSize
         img_resized = self._resize_image(img, curScale)
@@ -236,12 +248,12 @@ class PCN:
                         rw = int(w * sn)
                         if is_legal(rx, ry, padded_img) and is_legal(rx + rw - 1, ry + rw -1, padded_img):
                             if rotate[0, 1, i, j].item() > 0.5:
-                                winlist.append(Window2(rx, ry, rw, rw, 0, curScale, cls_prob[0, 1, i, j].item()))
+                                window_list.append(Window2(rx, ry, rw, rw, 0, curScale, cls_prob[0, 1, i, j].item()))
                             else:
-                                winlist.append(Window2(rx, ry, rw, rw, 180, curScale, cls_prob[0, 1, i, j].item()))
+                                window_list.append(Window2(rx, ry, rw, rw, 180, curScale, cls_prob[0, 1, i, j].item()))
             img_resized = self._resize_image(img_resized, self._scale)
             curScale = img.shape[0] / img_resized.shape[0]
-        return winlist
+        return window_list
     
     def _stage2(self, img, img180, net, thres, dim, windows):
         """
@@ -258,13 +270,13 @@ class PCN:
         Returns:
             list of `face_spinner.Window` -> List of detected faces
         """
-        winlist = windows[:]
-        length = len(winlist)
+        window_list = windows[:]
+        length = len(window_list)
         if length == 0:
-            return winlist
+            return window_list
         datalist = []
         height = img.shape[0]
-        for win in winlist:
+        for win in window_list:
             if abs(win.angle) < EPS:
                 datalist.append(self._preprocess_img(img[win.y:win.y+win.h, win.x:win.x+win.w, :], dim))
             else:
@@ -283,10 +295,10 @@ class PCN:
                 sn = bbox[i, 0].item()
                 xn = bbox[i, 1].item()
                 yn = bbox[i, 2].item()
-                cropX = winlist[i].x
-                cropY = winlist[i].y
-                cropW = winlist[i].w
-                if abs(winlist[i].angle) > EPS:
+                cropX = window_list[i].x
+                cropY = window_list[i].y
+                cropW = window_list[i].w
+                if abs(window_list[i].angle) > EPS:
                     cropY = height - 1 - (cropY + cropW - 1)
                 w = int(sn * cropW)
                 x = int(cropX - 0.5 * sn * cropW + cropW * sn * xn + 0.5 * cropW)
@@ -299,14 +311,14 @@ class PCN:
                         maxRotateIndex = j
                 if is_legal(x, y, img) and is_legal(x+w-1, y+w-1, img):
                     angle = 0
-                    if abs(winlist[i].angle) < EPS:
+                    if abs(window_list[i].angle) < EPS:
                         if maxRotateIndex == 0:
                             angle = 90
                         elif maxRotateIndex == 1:
                             angle = 0
                         else:
                             angle = -90
-                        new_windows.append(Window2(x, y, w, w, angle, winlist[i].scale, cls_prob[i, 1].item()))
+                        new_windows.append(Window2(x, y, w, w, angle, window_list[i].scale, cls_prob[i, 1].item()))
                     else:
                         if maxRotateIndex == 0:
                             angle = 90
@@ -314,7 +326,7 @@ class PCN:
                             angle = 180
                         else:
                             angle = -90
-                        new_windows.append(Window2(x, height-1-(y+w-1), w, w, angle, winlist[i].scale, cls_prob[i, 1].item()))
+                        new_windows.append(Window2(x, height-1-(y+w-1), w, w, angle, window_list[i].scale, cls_prob[i, 1].item()))
         return new_windows
     
     def _stage3(self, padded_img, img180, img90, img_neg90, net, thres, dim, windows):
@@ -334,15 +346,15 @@ class PCN:
         Returns:
             list of `face_spinner.Window` -> List of detected faces
         """
-        winlist = windows[:]
-        length = len(winlist)
+        window_list = windows[:]
+        length = len(window_list)
         if length == 0:
-            return winlist
+            return window_list
 
         datalist = []
         height, width = padded_img.shape[:2]
 
-        for win in winlist:
+        for win in window_list:
             if abs(win.angle) < EPS:
                 datalist.append(self._preprocess_img(padded_img[win.y:win.y+win.h, win.x:win.x+win.w, :], dim))
             elif abs(win.angle - 90) < EPS:
@@ -367,19 +379,19 @@ class PCN:
                 sn = bbox[i, 0].item()
                 xn = bbox[i, 1].item()
                 yn = bbox[i, 2].item()
-                cropX = winlist[i].x
-                cropY = winlist[i].y
-                cropW = winlist[i].w
+                cropX = window_list[i].x
+                cropY = window_list[i].y
+                cropW = window_list[i].w
                 img_tmp = padded_img
-                if abs(winlist[i].angle - 180) < EPS:
+                if abs(window_list[i].angle - 180) < EPS:
                     cropY = height - 1 - (cropY + cropW -1)
                     img_tmp = img180
-                elif abs(winlist[i].angle - 90) < EPS:
+                elif abs(window_list[i].angle - 90) < EPS:
                     cropX, cropY = cropY, cropX
                     img_tmp = img90
-                elif abs(winlist[i].angle + 90) < EPS:
-                    cropX = winlist[i].y
-                    cropY = width -1 - (winlist[i].x + winlist[i].w - 1)
+                elif abs(window_list[i].angle + 90) < EPS:
+                    cropX = window_list[i].y
+                    cropY = width -1 - (window_list[i].x + window_list[i].w - 1)
                     img_tmp = img_neg90
 
                 w = int(sn * cropW)
@@ -387,14 +399,14 @@ class PCN:
                 y = int(cropY - 0.5 * sn * cropW + cropW * sn * yn + 0.5 * cropW)
                 angle = self._angle_range * rotate[i, 0].item()
                 if is_legal(x, y, img_tmp) and is_legal(x+w-1, y+w-1, img_tmp):
-                    if abs(winlist[i].angle) < EPS:
-                        new_windows.append(Window2(x, y, w, w, angle, winlist[i].scale, cls_prob[i, 1].item()))
-                    elif abs(winlist[i].angle - 180) < EPS:
-                        new_windows.append(Window2(x, height-1-(y+w-1), w, w, 180-angle, winlist[i].scale, cls_prob[i, 1].item()))
-                    elif abs(winlist[i].angle - 90) < EPS:
-                        new_windows.append(Window2(y, x, w, w, 90-angle, winlist[i].scale, cls_prob[i, 1].item()))
+                    if abs(window_list[i].angle) < EPS:
+                        new_windows.append(Window2(x, y, w, w, angle, window_list[i].scale, cls_prob[i, 1].item()))
+                    elif abs(window_list[i].angle - 180) < EPS:
+                        new_windows.append(Window2(x, height-1-(y+w-1), w, w, 180-angle, window_list[i].scale, cls_prob[i, 1].item()))
+                    elif abs(window_list[i].angle - 90) < EPS:
+                        new_windows.append(Window2(y, x, w, w, 90-angle, window_list[i].scale, cls_prob[i, 1].item()))
                     else:
-                        new_windows.append(Window2(width-y-w, x, w, w, -90+angle, winlist[i].scale, cls_prob[i, 1].item()))
+                        new_windows.append(Window2(width-y-w, x, w, w, -90+angle, window_list[i].scale, cls_prob[i, 1].item()))
         return new_windows   
     
     def detect(self, img):

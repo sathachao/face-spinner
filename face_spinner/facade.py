@@ -4,7 +4,7 @@ import torch
 import cv2
 import torch
 
-from face_spinner.utils import Window, to_torch_tensor
+from face_spinner.utils import to_torch_tensor
 
 EPS = 1e-5
 
@@ -73,7 +73,7 @@ def calculate_IoU(window1, window2):
     return intersection / union
 
 
-class Window2:
+class Window:
     def __init__(self, x, y, w, h, angle, scale, conf):
         self.x = x
         self.y = y
@@ -284,7 +284,7 @@ class PCN:
                         ):
                             if rotate[0, 1, i, j].item() > 0.5:
                                 window_list.append(
-                                    Window2(
+                                    Window(
                                         rx,
                                         ry,
                                         rw,
@@ -296,7 +296,7 @@ class PCN:
                                 )
                             else:
                                 window_list.append(
-                                    Window2(
+                                    Window(
                                         rx,
                                         ry,
                                         rw,
@@ -382,7 +382,7 @@ class PCN:
                         else:
                             angle = -90
                         new_windows.append(
-                            Window2(
+                            Window(
                                 x,
                                 y,
                                 w,
@@ -400,7 +400,7 @@ class PCN:
                         else:
                             angle = -90
                         new_windows.append(
-                            Window2(
+                            Window(
                                 x,
                                 height - 1 - (y + w - 1),
                                 w,
@@ -500,7 +500,7 @@ class PCN:
                 if is_legal(x, y, img_tmp) and is_legal(x + w - 1, y + w - 1, img_tmp):
                     if abs(window_list[i].angle) < EPS:
                         new_windows.append(
-                            Window2(
+                            Window(
                                 x,
                                 y,
                                 w,
@@ -512,7 +512,7 @@ class PCN:
                         )
                     elif abs(window_list[i].angle - 180) < EPS:
                         new_windows.append(
-                            Window2(
+                            Window(
                                 x,
                                 height - 1 - (y + w - 1),
                                 w,
@@ -524,7 +524,7 @@ class PCN:
                         )
                     elif abs(window_list[i].angle - 90) < EPS:
                         new_windows.append(
-                            Window2(
+                            Window(
                                 y,
                                 x,
                                 w,
@@ -536,7 +536,7 @@ class PCN:
                         )
                     else:
                         new_windows.append(
-                            Window2(
+                            Window(
                                 width - y - w,
                                 x,
                                 w,

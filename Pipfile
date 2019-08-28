@@ -12,10 +12,12 @@ numpy = "*"
 flask = "*"
 opencv-contrib-python = "*"
 matplotlib = "*"
-torch = {file = "https://download.pytorch.org/whl/cpu/torch-1.0.1.post2-cp36-cp36m-linux_x86_64.whl"}
-torchvision = "*"
 black = "==18.9b0"
 pytest = "*"
+torch = "==1.2.0+cpu"
+torchvision = "==0.4.0+cpu"
+werkzeug = ">=0.15.3"
+jinja2 = ">=2.10.1"
 
 [requires]
 python_version = "3.6"

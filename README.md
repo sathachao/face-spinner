@@ -9,6 +9,10 @@ Face Spinner is an application for mitigating face orientation problems in image
 ### Install dependencies
 
 ```bash
+
+# For the current version, please execute this first
+export PIP_FIND_LINKS=https://download.pytorch.org/whl/torch_stable.html
+
 # If pipenv is installed
 pipenv sync
 

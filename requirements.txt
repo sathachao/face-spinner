@@ -18,7 +18,7 @@ opencv-contrib-python==4.1.0.25
 packaging==19.1
 pillow==6.1.0
 pluggy==0.12.0
-py==1.8.0
+py==1.10.0
 pyparsing==2.4.2
 pytest==5.1.1
 python-dateutil==2.8.0
